@@ -3,6 +3,10 @@ export abstract class Campaign {
 }
 
 export class NoCampaign extends Campaign {
+  constructor() {
+    super();
+  }
+
   override apply(amount: number): number {
     return amount;
   }
