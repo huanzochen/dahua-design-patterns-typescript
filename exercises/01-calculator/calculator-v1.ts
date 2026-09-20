@@ -14,5 +14,13 @@ export function calculate(
   numberB: number,
   operator: Operator,
 ): number {
-  throw new Error("Not implemented");
+  if (operator === "+") {
+    return numberA + numberB;
+  } else if (operator === "-") {
+    return numberA - numberB;
+  } else if (operator === "*") {
+    return numberA * numberB;
+  } else {
+    return numberA / numberB;
+  }
 }
