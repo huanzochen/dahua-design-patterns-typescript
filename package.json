@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "exercise": "tsx",
-    "test": "tsx --test exercises/01-calculator/*.test.ts",
+    "test": "tsx --test exercises/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
