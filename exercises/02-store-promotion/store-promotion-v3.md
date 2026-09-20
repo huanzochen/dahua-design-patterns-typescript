@@ -1,5 +1,228 @@
 # Store Promotion V3：策略模式
 
+## 先用一句話理解
+
+策略模式做的事情是：
+
+> 把一段可能被替換的計算方式放進獨立物件，讓使用者只透過共同介面執行它。
+
+在商場促銷範例中，「正常收費」、「八折」與「滿 300 減 100」都是不同的計算方式，也就是不同策略。
+
+策略模式不是為了消滅所有 `switch`，也不是負責自動找到最優惠的活動。它主要處理的是：選定一個演算法之後，系統如何用相同方式執行它。
+
+## 從沒有策略模式開始
+
+最直接的寫法會把所有公式放在一起：
+
+```ts
+function calculate(amount: number, campaignType: string): number {
+  switch (campaignType) {
+    case "normal":
+      return amount;
+    case "percentage":
+      return amount * 0.8;
+    case "rebate":
+      return amount - Math.floor(amount / 300) * 100;
+    default:
+      throw new Error(`Unsupported campaign: ${campaignType}`);
+  }
+}
+```
+
+這裡混合了兩個不同問題：
+
+1. 要使用哪一種促銷？
+2. 每種促銷如何計算？
+
+每新增一種促銷，都要回到同一個函式增加分支與公式。選擇邏輯和計算邏輯綁在一起。
+
+## 第一步：找出會變化的部分
+
+三種促銷都有相同形狀：
+
+```text
+輸入原始金額 → 執行某種計算 → 回傳實收金額
+```
+
+因此可以定義共同操作：
+
+```ts
+abstract apply(amount: number): number;
+```
+
+這個操作就是所有策略之間的約定。只要一個物件遵守這個約定，Context 就能使用它。
+
+## 第二步：把每個公式搬進獨立物件
+
+原本 `switch` 裡的三段公式被拆成三個類別：
+
+```ts
+class NoCampaign extends Campaign {
+  apply(amount: number): number {
+    return amount;
+  }
+}
+
+class PercentageCampaign extends Campaign {
+  apply(amount: number): number {
+    return amount * 0.8;
+  }
+}
+
+class RebateCampaign extends Campaign {
+  apply(amount: number): number {
+    return amount - Math.floor(amount / 300) * 100;
+  }
+}
+```
+
+現在每個類別只負責一個演算法。修改百分比折扣時，不需要碰滿額折抵的公式。
+
+這一步就是策略模式最核心的動作：**封裝會變化的演算法**。
+
+## 第三步：讓 Context 使用抽象策略
+
+`CampaignContext` 不判斷策略種類，也不知道八折或滿額折抵的公式：
+
+```ts
+class CampaignContext {
+  constructor(private readonly campaign: Campaign) {}
+
+  calculate(amount: number): number {
+    return this.campaign.apply(amount);
+  }
+}
+```
+
+建立 Context 時，外部把策略放進去：
+
+```ts
+const context = new CampaignContext(
+  new PercentageCampaign(0.8),
+);
+```
+
+之後 Context 只做委派：
+
+```ts
+context.calculate(1000);
+```
+
+Context 不必詢問策略是哪個類別。實際物件是 `PercentageCampaign`，所以執行它的 `apply()`；換成 `RebateCampaign`，同一行 Context 程式就會執行滿額折抵。
+
+```ts
+const percentageContext = new CampaignContext(
+  new PercentageCampaign(0.8),
+);
+
+const rebateContext = new CampaignContext(
+  new RebateCampaign(300, 100),
+);
+
+percentageContext.calculate(1000); // 800
+rebateContext.calculate(1000); // 700
+```
+
+這就是「策略可以互相替換」的意思：Context 的程式碼不變，只替換注入的物件。
+
+## 策略模式究竟改變了什麼
+
+改寫前：
+
+```text
+Client
+  └── switch
+      ├── 正常收費公式
+      ├── 百分比公式
+      └── 滿額折抵公式
+```
+
+改寫後：
+
+```text
+Client 選擇策略
+        ↓
+CampaignContext
+        ↓
+Campaign 共同介面
+        ↓
+某一個具體策略物件
+```
+
+真正的變化有四點：
+
+1. 每個演算法有自己的類別。
+2. 所有演算法提供相同的操作。
+3. Context 依賴抽象 `Campaign`，不依賴具體公式。
+4. 使用哪個演算法，改由外部透過建構子注入。
+
+換句話說，策略模式把「演算法的選擇」和「演算法的執行」分開：
+
+- Client 選擇策略。
+- Context 執行策略。
+- ConcreteStrategy 保存公式。
+
+## Context 只有一行，真的有必要嗎
+
+在目前的小範例裡，直接呼叫策略也能得到答案：
+
+```ts
+const campaign = new PercentageCampaign(0.8);
+campaign.apply(1000);
+```
+
+所以如果只看這個三十行左右的練習，`CampaignContext` 的確顯得很薄。這是合理的觀察，不需要為了模式而假裝它很複雜。
+
+Context 的價值通常在真實流程變大後出現。例如所有策略都需要相同的前後處理：
+
+```ts
+class CampaignContext {
+  calculate(amount: number): number {
+    console.log(`Original amount: ${amount}`);
+
+    const result = this.campaign.apply(amount);
+
+    console.log(`Final amount: ${result}`);
+    return result;
+  }
+}
+```
+
+這些共通流程只需要放在 Context，不必散落在每個 client，也不必重複到每個策略類別。
+
+因此可以這樣判斷：
+
+- 只有一個簡單函式呼叫時，Context 可能沒有太大價值。
+- 有固定流程但其中一個步驟需要替換時，Context 很有價值。
+- 策略模式的核心是可替換演算法；Context 是管理及使用策略的角色。
+
+## 策略模式沒有做什麼
+
+策略模式本身沒有負責：
+
+- 從字串或設定檔建立策略。
+- 自動決定哪個策略最優惠。
+- 消除 client 選擇策略的程式。
+- 同時疊加多個策略。
+- 驗證折扣率或處理金額精度。
+
+這些是其他責任，可能分別需要 Factory、規則引擎、Pipeline、Composite、Decorator 或金額型別等設計。
+
+## 一個生活化比喻
+
+可以把 Context 想成導航程式，把 Strategy 想成路線演算法：
+
+```text
+導航 Context
+├── 最快路線 Strategy
+├── 最短路線 Strategy
+└── 避開收費道路 Strategy
+```
+
+導航流程都是「輸入起點與終點，取得路線」，但計算路線的演算法可以替換。導航程式不需要把三套尋路公式寫在同一個 `switch` 裡。
+
+商場範例也是相同概念：Context 的使用流程固定，但實收金額的演算法可以替換。
+
 ## 策略模式解決什麼問題
 
 商場可能使用不同方式計算實收金額：
