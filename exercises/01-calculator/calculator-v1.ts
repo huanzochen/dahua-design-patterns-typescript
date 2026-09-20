@@ -14,13 +14,14 @@ export function calculate(
   numberB: number,
   operator: Operator,
 ): number {
-  if (operator === "+") {
-    return numberA + numberB;
-  } else if (operator === "-") {
-    return numberA - numberB;
-  } else if (operator === "*") {
-    return numberA * numberB;
-  } else {
-    return numberA / numberB;
+  switch (operator) {
+    case "+":
+      return numberA + numberB;
+    case "-":
+      return numberA - numberB;
+    case "*":
+      return numberA * numberB;
+    case "/":
+      return numberA / numberB;
   }
 }
